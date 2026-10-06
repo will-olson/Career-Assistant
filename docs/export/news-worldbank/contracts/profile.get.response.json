@@ -1,0 +1,34 @@
+{
+  "id": "profile.get.response",
+  "route": "GET /profile?user_id={id}",
+  "server": "server/app.py get_profile lines 534-556",
+  "usedByNewsOrWorldBankUi": false,
+  "missingUserId": {
+    "status": 400,
+    "body": { "message": "User ID is required" }
+  },
+  "userNotFound": {
+    "status": 404,
+    "body": { "message": "User not found" }
+  },
+  "success": {
+    "status": 200,
+    "body": {
+      "name": "Ada",
+      "favorites": [
+        {
+          "id": 1,
+          "company_name": "Stripe",
+          "link": "https://stripe.com",
+          "indeed": "https://www.indeed.com/q-stripe-jobs.html",
+          "category": "Fintech"
+        }
+      ]
+    }
+  },
+  "rules": [
+    "This is the shape Career Assistant's client code expects (a favorites array of objects with id).",
+    "No NewsAPI or World Bank screen calls GET /profile.",
+    "id here is favorite.company.id, the same value as company_id on GET /favorites."
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "id": "category-news.response",
+  "route": "GET /categories/<category_name>",
+  "server": "server/app.py view_companies_in_category_and_news lines 500-516",
+  "notFound": {
+    "status": 404,
+    "body": { "message": "Category not found." }
+  },
+  "success": {
+    "status": 200,
+    "body": [
+      {
+        "company_name": "Stripe",
+        "category": "Fintech",
+        "news_articles": [
+          {
+            "title": "Example headline",
+            "url": "https://example.com/story"
+          }
+        ]
+      }
+    ]
+  },
+  "rules": [
+    "Array of companies in that category. Empty array when the category exists and has no companies.",
+    "news_articles length is at most 5 after the [Removed] filter.",
+    "Articles are stripped. description, source, publishedAt, and urlToImage are not in this payload.",
+    "Category name is taken from the path and matched with Category.name equality."
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "favorites.get.response",
+  "route": "GET /favorites?user_id={id}",
+  "server": "server/app.py manage_favorites lines 454-468",
+  "missingUserId": {
+    "status": 400,
+    "body": { "message": "User ID is required" }
+  },
+  "success": {
+    "status": 200,
+    "body": [
+      {
+        "company_id": 1,
+        "company_name": "Stripe",
+        "link": "https://stripe.com",
+        "indeed": "https://www.indeed.com/q-stripe-jobs.html",
+        "category": "Fintech"
+      }
+    ]
+  },
+  "rules": [
+    "Body is a JSON array. There is no favorites wrapper.",
+    "There is no id field. The favorite row id is not returned. company_id is the company primary key.",
+    "ProfilePage maps company_id to id and company_name to name before calling GET /news/{id}.",
+    "CareerAssistant checks response.data.favorites, which is undefined for this array, and then looks up favorite.id and favorite.name."
+  ]
+}

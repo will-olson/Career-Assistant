@@ -1,0 +1,44 @@
+{
+  "id": "worldbank.country.mapped",
+  "upstream": {
+    "method": "GET",
+    "url": "https://api.worldbank.org/v2/country?format=json",
+    "callers": [
+      "client/src/components/DataPage.js fetchTopCountries lines 38-51",
+      "client/src/components/DataPage.js fetchCountries lines 57-84",
+      "client/src/components/CareerAssistant.js fetchRegions lines 128-134"
+    ],
+    "envelope": "JSON array. Index 0 is metadata. Index 1 is the country array. Code uses [1] only."
+  },
+  "dataPageMappedRow": {
+    "id": "US",
+    "name": "United States",
+    "region": "North America",
+    "incomeLevel": "High income",
+    "capitalCity": "Washington D.C.",
+    "longitude": "-77.032",
+    "latitude": "38.8895"
+  },
+  "sourcePaths": {
+    "id": "country.id",
+    "name": "country.name",
+    "region": "country.region.value",
+    "incomeLevel": "country.incomeLevel.value",
+    "capitalCity": "country.capitalCity",
+    "longitude": "country.longitude",
+    "latitude": "country.latitude"
+  },
+  "dataPageBehavior": {
+    "initial": "shuffle all countries, slice 4",
+    "searchEmpty": "shuffle, slice 5 (fetchCountries with a blank query; the search handler trims, so a cleared box takes this branch)",
+    "searchNonEmpty": "filter country.name case-insensitive substring. Region is not the filter field.",
+    "rendered": ["name", "region", "incomeLevel", "capitalCity"]
+  },
+  "careerAssistantRegions": {
+    "mappedTo": "array of strings",
+    "expression": "response.data[1].map(country => country.region.value)",
+    "deduped": false,
+    "sentToServerAs": "selectedRegion string",
+    "serverEffect": "prompt sentence only, not an indicator request"
+  }
+}

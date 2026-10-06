@@ -1,0 +1,446 @@
+{
+  "package": "news-worldbank-export",
+  "description": "Seam index for NewsAPI and World Bank paths from Flask through React. Line numbers match the audited source.",
+  "secrets": "Names only. NEWS_API_KEY and OPENAI_API_KEY are read in server/app.py via dotenv. Values are not in this package.",
+  "hosts": {
+    "flask": ["http://127.0.0.1:5555", "http://localhost:5555"],
+    "craProxy": "http://localhost:5555",
+    "craProxyConfig": "client/package.json#proxy",
+    "newsapi": "https://newsapi.org/v2/everything",
+    "worldBankV2": "https://api.worldbank.org/v2",
+    "worldBankIndicator": "http://api.worldbank.org/v2/country/all/indicator/{indicator}",
+    "dataCatalog": "https://datacatalogapi.worldbank.org/ddhxext/Search",
+    "openai": "https://api.openai.com/v1/chat/completions"
+  },
+  "auth": {
+    "clientKey": "localStorage.user_id",
+    "login": "POST /login returns user_id; client stores it. Flask session is not set on login.",
+    "logout": "POST /logout pops session user_id; client removes localStorage user_id"
+  },
+  "boundary": {
+    "id": "alphavantage.on-data-page",
+    "note": "Data page also calls GET /api/top-stocks, GET /symbol-search, and GET /financial-metrics/:symbol. Those are Alpha Vantage, not World Bank. Do not migrate them as part of the World Bank surfaces."
+  },
+  "seams": [
+    {
+      "id": "newsapi.fetch",
+      "userRoute": null,
+      "purpose": "Single NewsAPI choke point. All news headlines pass through this function.",
+      "client": null,
+      "server": {
+        "file": "server/app.py",
+        "symbol": "fetch_news_for_company",
+        "lines": "36-57",
+        "cache": {
+          "store": "news_cache",
+          "key": "company_name string",
+          "ttlSeconds": 86400,
+          "constant": "CACHE_TTL",
+          "constantLines": "22-23"
+        }
+      },
+      "upstream": {
+        "method": "GET",
+        "url": "https://newsapi.org/v2/everything",
+        "authEnv": "NEWS_API_KEY",
+        "query": {
+          "q": "company name, not ticker or domain",
+          "language": "en",
+          "sortBy": "relevancy",
+          "pageSize": 10
+        },
+        "notSent": ["from", "to", "sources", "domains", "excludeDomains"]
+      },
+      "renderedFields": [],
+      "contract": "contracts/newsapi.request.json",
+      "trace": "traces/01-newsapi-choke-point.md"
+    },
+    {
+      "id": "news.industry.categories",
+      "userRoute": "/industry-news",
+      "purpose": "Sidebar of industry names. No news yet.",
+      "client": {
+        "file": "client/src/components/IndustryNews.js",
+        "symbol": "fetchCategories",
+        "lines": "10-20",
+        "call": "GET http://127.0.0.1:5555/categories"
+      },
+      "server": {
+        "file": "server/app.py",
+        "symbol": "get_categories",
+        "lines": "495-498",
+        "route": "GET /categories"
+      },
+      "upstream": null,
+      "renderedFields": ["name"],
+      "contract": null,
+      "trace": "traces/02-industry-news.md"
+    },
+    {
+      "id": "news.industry.category",
+      "userRoute": "/industry-news",
+      "purpose": "Companies in one category, each with up to 5 title/url headlines.",
+      "client": {
+        "file": "client/src/components/IndustryNews.js",
+        "symbol": "handleCategoryClick",
+        "lines": "37-48",
+        "call": "GET http://127.0.0.1:5555/categories/{categoryName}",
+        "renderLines": "76-110"
+      },
+      "server": {
+        "file": "server/app.py",
+        "symbol": "view_companies_in_category_and_news",
+        "lines": "500-516",
+        "route": "GET /categories/<category_name>",
+        "articleCount": 5,
+        "articleShape": "stripped to title and url"
+      },
+      "upstream": {
+        "via": "newsapi.fetch",
+        "desiredArticleCount": 5
+      },
+      "renderedFields": ["company_name", "news_articles[].title", "news_articles[].url"],
+      "emptyCopy": "No news articles available.",
+      "contract": "contracts/category-news.response.json",
+      "trace": "traces/02-industry-news.md"
+    },
+    {
+      "id": "news.profile.favorites",
+      "userRoute": "/profile",
+      "purpose": "Load favorites, remap company_id to id, then fan out news.",
+      "client": {
+        "file": "client/src/components/ProfilePage.js",
+        "symbol": "fetchFavorites",
+        "lines": "33-61",
+        "call": "GET /favorites?user_id={id}",
+        "transport": "CRA proxy to http://localhost:5555",
+        "remap": "company_id -> id, company_name -> name"
+      },
+      "server": {
+        "file": "server/app.py",
+        "symbol": "manage_favorites GET",
+        "lines": "454-468",
+        "route": "GET /favorites",
+        "bodyShape": "JSON array, not { favorites: [...] }"
+      },
+      "upstream": null,
+      "renderedFields": ["name", "link", "category", "indeed"],
+      "contract": "contracts/favorites.get.response.json",
+      "trace": "traces/03-profile-related-news.md",
+      "contrast": {
+        "unusedRoute": "GET /profile",
+        "unusedLines": "534-556",
+        "unusedShape": "{ name, favorites: [{ id, company_name, link, indeed, category }] }",
+        "unusedContract": "contracts/profile.get.response.json"
+      }
+    },
+    {
+      "id": "news.profile.articles",
+      "userRoute": "/profile",
+      "purpose": "N+1 news fetch. UI reads title and url only.",
+      "client": {
+        "file": "client/src/components/ProfilePage.js",
+        "symbol": "fetchNewsForFavorites",
+        "lines": "64-84",
+        "call": "GET /news/{favorite.id}",
+        "transport": "CRA proxy",
+        "renderFile": "client/src/components/News.js",
+        "renderLines": "3-22"
+      },
+      "server": {
+        "file": "server/app.py",
+        "symbol": "get_news_for_company",
+        "lines": "518-532",
+        "route": "GET /news/<int:company_id>",
+        "articleCount": 5,
+        "articleShape": "full NewsAPI article objects"
+      },
+      "upstream": {
+        "via": "newsapi.fetch",
+        "desiredArticleCount": 5
+      },
+      "renderedFields": ["company_name", "articles[].title", "articles[].url"],
+      "emptyCopy": "No news available.",
+      "contract": "contracts/company-news.response.json",
+      "trace": "traces/03-profile-related-news.md"
+    },
+    {
+      "id": "news.career.client-prefetch",
+      "userRoute": "/career-assistant",
+      "purpose": "Client tries to prefetch favorites and news. The favorites check never matches the API, so news state stays empty.",
+      "client": {
+        "file": "client/src/components/CareerAssistant.js",
+        "symbols": ["fetchUserFavorites", "fetchNewsArticles"],
+        "lines": "38-101",
+        "calls": [
+          "GET http://localhost:5555/favorites?user_id={userId}",
+          "GET http://localhost:5555/news/{favorite.id}"
+        ],
+        "expects": "response.data.favorites and favorite.id / favorite.name"
+      },
+      "server": {
+        "file": "server/app.py",
+        "symbol": "manage_favorites GET",
+        "lines": "460-468",
+        "actualBody": "array of { company_id, company_name, link, indeed, category }"
+      },
+      "upstream": {
+        "via": "newsapi.fetch",
+        "reached": false,
+        "reason": "userFavorites stays [] because response.data.favorites is undefined"
+      },
+      "renderedFields": [],
+      "contract": "contracts/favorites.get.response.json",
+      "trace": "traces/04-career-assistant.md"
+    },
+    {
+      "id": "news.career.server-prompt",
+      "userRoute": "/career-assistant",
+      "purpose": "Logged-in POST. Server ignores client news_articles and rebuilds 3 headlines per favorite into the GPT prompt.",
+      "client": {
+        "file": "client/src/components/CareerAssistant.js",
+        "symbol": "handleSubmit",
+        "lines": "177-203",
+        "call": "POST http://localhost:5555/career-assistant",
+        "renderLines": "226-241, 287-300",
+        "ignoredByServer": ["user_favorites", "news_articles"]
+      },
+      "server": {
+        "file": "server/app.py",
+        "symbol": "career_assistant",
+        "lines": "63-204",
+        "newsLines": "84-100",
+        "promptInstructionLines": "145-146",
+        "openaiLines": "183-201",
+        "route": "POST /career-assistant",
+        "requires": "JSON user_id",
+        "articleCount": 3
+      },
+      "upstream": [
+        {
+          "via": "newsapi.fetch",
+          "desiredArticleCount": 3,
+          "fieldsUsed": ["title", "url"]
+        },
+        {
+          "method": "POST",
+          "url": "https://api.openai.com/v1/chat/completions",
+          "model": "gpt-4o-mini",
+          "temperature": 0.7
+        }
+      ],
+      "renderedFields": ["response"],
+      "render": "formatResponse turns bare URLs into anchors; GPT is also given prebuilt <a> tags",
+      "contract": "contracts/career-assistant.request.json",
+      "trace": "traces/04-career-assistant.md"
+    },
+    {
+      "id": "wb.country.browser",
+      "userRoute": "/data",
+      "purpose": "Country metadata from the browser. Search filters country name. First paint is 4 shuffled countries.",
+      "client": {
+        "file": "client/src/components/DataPage.js",
+        "symbols": ["fetchTopCountries", "fetchCountries", "handleCountrySearchChange"],
+        "lines": "38-92",
+        "renderLines": "318-327",
+        "call": "GET https://api.worldbank.org/v2/country?format=json"
+      },
+      "server": null,
+      "upstream": {
+        "method": "GET",
+        "url": "https://api.worldbank.org/v2/country",
+        "query": { "format": "json" },
+        "envelope": "[metadata, rows]",
+        "rowIndexUsed": 1
+      },
+      "renderedFields": ["name", "region", "incomeLevel", "capitalCity"],
+      "mappedButNotRendered": ["id", "longitude", "latitude"],
+      "contract": "contracts/worldbank.country.mapped.json",
+      "trace": "traces/05-data-page-regions-topics.md"
+    },
+    {
+      "id": "wb.topic.browser",
+      "userRoute": "/data",
+      "purpose": "Topic list from the browser. Search filters topic name. Empty query clears the list.",
+      "client": {
+        "file": "client/src/components/DataPage.js",
+        "symbols": ["fetchTopics", "handleTopicSearchChange"],
+        "lines": "149-174",
+        "renderLines": "269-278",
+        "call": "GET https://api.worldbank.org/v2/topic?format=json"
+      },
+      "server": null,
+      "upstream": {
+        "method": "GET",
+        "url": "https://api.worldbank.org/v2/topic",
+        "query": { "format": "json" },
+        "envelope": "[metadata, rows]",
+        "rowIndexUsed": 1
+      },
+      "renderedFields": ["name", "description"],
+      "contract": "contracts/worldbank.topic.mapped.json",
+      "trace": "traces/05-data-page-regions-topics.md"
+    },
+    {
+      "id": "wb.catalog.data-page",
+      "userRoute": "/data",
+      "purpose": "Report search. Results render only while the company search box is empty and the user is signed in.",
+      "client": {
+        "file": "client/src/components/DataPage.js",
+        "symbols": ["handleDataCatalogSearchChange", "fetchCatalogResults"],
+        "lines": "176-215",
+        "renderLines": "280-315",
+        "call": "GET http://localhost:5555/api/search?q={query}",
+        "visibility": "parent block is userId && !searchQuery"
+      },
+      "server": {
+        "file": "server/app.py",
+        "symbol": "search_catalog",
+        "lines": "303-356",
+        "route": "GET /api/search",
+        "requires": "q"
+      },
+      "upstream": {
+        "method": "GET",
+        "url": "https://datacatalogapi.worldbank.org/ddhxext/Search",
+        "query": { "qname": "dataset", "qterm": "{q}", "$top": 10 }
+      },
+      "renderedFields": ["title", "description", "link"],
+      "html": "description via dangerouslySetInnerHTML",
+      "contract": "contracts/datacatalog.search.json",
+      "trace": "traces/06-data-page-catalog.md"
+    },
+    {
+      "id": "wb.topic.career",
+      "userRoute": "/career-assistant",
+      "purpose": "Topic dropdown. Selected name is prompt text only.",
+      "client": {
+        "file": "client/src/components/CareerAssistant.js",
+        "symbol": "fetchTopics",
+        "lines": "110-117",
+        "renderLines": "463-471",
+        "call": "GET https://api.worldbank.org/v2/topic?format=json",
+        "stateField": "inputs.selectedTopic"
+      },
+      "server": {
+        "file": "server/app.py",
+        "symbol": "career_assistant",
+        "lines": "149-150",
+        "effect": "appends Focus on the topic: {selectedTopic}."
+      },
+      "upstream": {
+        "method": "GET",
+        "url": "https://api.worldbank.org/v2/topic",
+        "query": { "format": "json" },
+        "fieldsKept": ["value"]
+      },
+      "renderedFields": ["topic name string"],
+      "contract": "contracts/worldbank.topic.mapped.json",
+      "trace": "traces/07-career-assistant-world-bank.md"
+    },
+    {
+      "id": "wb.region.career",
+      "userRoute": "/career-assistant",
+      "purpose": "Region dropdown built from every country's region.value. Labels repeat.",
+      "client": {
+        "file": "client/src/components/CareerAssistant.js",
+        "symbol": "fetchRegions",
+        "lines": "128-135",
+        "renderLines": "485-493",
+        "call": "GET https://api.worldbank.org/v2/country?format=json",
+        "stateField": "inputs.selectedRegion",
+        "deduped": false
+      },
+      "server": {
+        "file": "server/app.py",
+        "symbol": "career_assistant",
+        "lines": "153-154",
+        "effect": "appends Focus on the region: {selectedRegion}."
+      },
+      "upstream": {
+        "method": "GET",
+        "url": "https://api.worldbank.org/v2/country",
+        "query": { "format": "json" },
+        "fieldsKept": ["region.value"]
+      },
+      "renderedFields": ["region label"],
+      "contract": "contracts/worldbank.country.mapped.json",
+      "trace": "traces/07-career-assistant-world-bank.md"
+    },
+    {
+      "id": "wb.catalog.career-client",
+      "userRoute": "/career-assistant",
+      "purpose": "Report typeahead. Mount calls fetchReports() with no query, which the API rejects.",
+      "client": {
+        "file": "client/src/components/CareerAssistant.js",
+        "symbol": "fetchReports",
+        "lines": "103-108, 137-173, 496-550",
+        "call": "GET http://localhost:5555/api/search",
+        "params": { "q": "query argument, undefined on mount" },
+        "filter": "normalized substring of title"
+      },
+      "server": {
+        "file": "server/app.py",
+        "symbol": "search_catalog",
+        "lines": "303-307",
+        "route": "GET /api/search",
+        "missingQ": 400
+      },
+      "upstream": {
+        "method": "GET",
+        "url": "https://datacatalogapi.worldbank.org/ddhxext/Search",
+        "query": { "qname": "dataset", "qterm": "{q}", "$top": 10 }
+      },
+      "renderedFields": ["title", "description", "link"],
+      "html": "description via dangerouslySetInnerHTML after the typed value equals the title",
+      "contract": "contracts/datacatalog.search.json",
+      "trace": "traces/07-career-assistant-world-bank.md"
+    },
+    {
+      "id": "wb.catalog.career-server",
+      "userRoute": "/career-assistant",
+      "purpose": "On submit, if selectedReport is set, Flask HTTP-calls its own /api/search and pastes a title match into the prompt.",
+      "client": {
+        "file": "client/src/components/CareerAssistant.js",
+        "symbol": "handleSubmit",
+        "lines": "182-190",
+        "field": "selectedReport"
+      },
+      "server": {
+        "file": "server/app.py",
+        "symbol": "career_assistant",
+        "lines": "155-179",
+        "selfCall": "GET http://localhost:5555/api/search?q={selected_report}",
+        "match": "title strip lower equals selected report strip lower"
+      },
+      "upstream": {
+        "via": "wb.catalog.data-page server search_catalog"
+      },
+      "renderedFields": [],
+      "promptFields": ["title", "description", "link"],
+      "contract": "contracts/datacatalog.search.json",
+      "trace": "traces/07-career-assistant-world-bank.md"
+    },
+    {
+      "id": "wb.indicator.unused",
+      "userRoute": null,
+      "purpose": "Indicator time series proxy. No client reference.",
+      "client": null,
+      "server": {
+        "file": "server/app.py",
+        "symbol": "get_world_bank_data",
+        "lines": "206-220",
+        "route": "GET /api/world-bank",
+        "defaultIndicator": "SP.POP.TOTL"
+      },
+      "upstream": {
+        "method": "GET",
+        "url": "http://api.worldbank.org/v2/country/all/indicator/{indicator}?format=json",
+        "returns": "raw World Bank envelope"
+      },
+      "renderedFields": [],
+      "contract": "contracts/worldbank.indicator.json",
+      "trace": "traces/08-indicator-unused.md"
+    }
+  ]
+}

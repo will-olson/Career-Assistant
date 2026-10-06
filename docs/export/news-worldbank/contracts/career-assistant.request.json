@@ -1,0 +1,70 @@
+{
+  "id": "career-assistant.request",
+  "route": "POST /career-assistant",
+  "client": "client/src/components/CareerAssistant.js handleSubmit lines 177-190",
+  "serverReads": [
+    "user_id",
+    "prompt",
+    "scope_of_analysis",
+    "sentiment_tone",
+    "level_of_detail",
+    "preferred_sources",
+    "time_frame",
+    "industry_focus",
+    "specific_topics",
+    "preferred_format",
+    "selectedTopic",
+    "selectedCompany",
+    "selectedRegion",
+    "selectedReport"
+  ],
+  "serverIgnores": ["user_favorites", "news_articles"],
+  "missingUserId": {
+    "status": 401,
+    "body": { "message": "User not logged in." }
+  },
+  "exampleBody": {
+    "prompt": "How should I think about payments roles? Please check if any of the following companies are mentioned: . If any of these companies are mentioned, provide the latest news articles and ensure that the links to these articles are clickable.",
+    "scope_of_analysis": ["Market Trends"],
+    "sentiment_tone": "Neutral",
+    "level_of_detail": "Brief",
+    "preferred_sources": ["Reuters"],
+    "time_frame": "Last 30 days",
+    "industry_focus": ["Technology"],
+    "specific_topics": "",
+    "preferred_format": "Bullet Points",
+    "selectedTopic": "Agriculture & Rural Development",
+    "selectedCompany": "Stripe",
+    "selectedRegion": "North America",
+    "selectedReport": "World Development Indicators",
+    "user_favorites": [],
+    "news_articles": [],
+    "user_id": "1"
+  },
+  "promptOnlyFields": {
+    "preferred_sources": "Joined into 'Preferred News Sources: ...'. Not passed to NewsAPI.",
+    "time_frame": "Written as 'Time Frame: ...'. Not passed as NewsAPI from/to. Also a React dependency of the dead news prefetch.",
+    "selectedTopic": "Focus on the topic: {value}.",
+    "selectedCompany": "Consider the company: {value}. This is the companies-table name, not a second NewsAPI query.",
+    "selectedRegion": "Focus on the region: {value}."
+  },
+  "liveDataInPrompt": {
+    "favorites": "Loaded with Favorites.query.filter_by(user_id=user_id), not from the POST body.",
+    "news": "fetch_news_for_company(name, desired_article_count=3) per favorite. HTML anchors of title and url.",
+    "selectedReport": "Self HTTP GET http://localhost:5555/api/search?q=... then exact title match."
+  },
+  "openai": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/chat/completions",
+    "body": {
+      "model": "gpt-4o-mini",
+      "messages": [{ "role": "user", "content": "<assembled prompt>" }],
+      "temperature": 0.7
+    }
+  },
+  "success": {
+    "status": 200,
+    "body": { "response": "<assistant text>" }
+  },
+  "clientRender": "res.data.response passed through formatResponse, then dangerouslySetInnerHTML"
+}

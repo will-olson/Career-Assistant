@@ -1,0 +1,27 @@
+{
+  "id": "company-news.response",
+  "route": "GET /news/<int:company_id>",
+  "server": "server/app.py get_news_for_company lines 518-531",
+  "notFound": {
+    "status": 404,
+    "body": { "message": "Company not found" }
+  },
+  "success": {
+    "status": 200,
+    "body": {
+      "company_name": "Stripe",
+      "articles": [
+        {
+          "title": "Example headline",
+          "url": "https://example.com/story"
+        }
+      ]
+    }
+  },
+  "rules": [
+    "articles items are the NewsAPI objects after the [Removed] filter and a slice of 5.",
+    "The example above shows only the fields the UI reads. The live payload includes the rest of each NewsAPI article.",
+    "Lookup is Company.id, then fetch_news_for_company(company.name).",
+    "Profile calls this once per favorite. Career Assistant's client prefetch targets the same route but does not run with a usable id. See migration/known-breaks.md."
+  ]
+}

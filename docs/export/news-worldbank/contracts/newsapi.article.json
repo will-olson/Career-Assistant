@@ -1,0 +1,22 @@
+{
+  "id": "newsapi.article",
+  "source": "response.json().articles item, stored and returned as-is except for the title filter and slice",
+  "fieldsReadByThisApp": ["title", "url"],
+  "filter": "drop the article when title == '[Removed]'",
+  "passthrough": "GET /news/<company_id> returns the article object unchanged. Other NewsAPI fields travel in that JSON. Profile and Industry News render only title and url. This repo has no fixture that lists the rest of the object.",
+  "exampleAsConsumed": {
+    "title": "Example headline",
+    "url": "https://example.com/story"
+  },
+  "shapesByRoute": {
+    "GET /categories/<category_name>": {
+      "news_articles[]": ["title", "url"]
+    },
+    "GET /news/<company_id>": {
+      "articles[]": "full article object from NewsAPI"
+    },
+    "POST /career-assistant prompt": {
+      "embeddedHtml": "<a href='{url}' target='_blank'>{title}</a>"
+    }
+  }
+}

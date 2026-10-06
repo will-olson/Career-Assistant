@@ -1,0 +1,33 @@
+{
+  "id": "worldbank.topic.mapped",
+  "upstream": {
+    "method": "GET",
+    "url": "https://api.worldbank.org/v2/topic?format=json",
+    "callers": [
+      "client/src/components/DataPage.js fetchTopics lines 149-164",
+      "client/src/components/CareerAssistant.js fetchTopics lines 110-116"
+    ],
+    "envelope": "JSON array. Index 0 is metadata. Index 1 is the topic array. Code uses [1] only."
+  },
+  "dataPageMappedRow": {
+    "id": "1",
+    "name": "Agriculture & Rural Development",
+    "description": "Source note text, or the literal 'No description available'"
+  },
+  "sourcePaths": {
+    "id": "topic.id",
+    "name": "topic.value",
+    "description": "topic.sourceNote || 'No description available'"
+  },
+  "dataPageBehavior": {
+    "search": "filter name case-insensitive substring",
+    "emptyQuery": "setTopics([]) and render nothing",
+    "rendered": ["name", "description"]
+  },
+  "careerAssistantTopics": {
+    "mappedTo": "array of strings",
+    "expression": "response.data[1].map(topic => topic.value)",
+    "sentToServerAs": "selectedTopic string",
+    "serverEffect": "prompt sentence only: Focus on the topic: {selectedTopic}."
+  }
+}

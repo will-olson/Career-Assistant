@@ -1,0 +1,32 @@
+{
+  "id": "worldbank.indicator",
+  "route": "GET /api/world-bank",
+  "server": "server/app.py get_world_bank_data lines 206-220",
+  "frontendCallers": [],
+  "query": {
+    "indicator": {
+      "default": "SP.POP.TOTL",
+      "meaning": "World Bank total population when the query param is omitted"
+    }
+  },
+  "upstream": {
+    "method": "GET",
+    "url": "http://api.worldbank.org/v2/country/all/indicator/{indicator}?format=json",
+    "schemeNote": "This call uses http, not https. Country and topic calls from the browser use https."
+  },
+  "errors": {
+    "upstreamNon200": {
+      "status": 500,
+      "body": { "error": "Failed to fetch World Bank data" }
+    },
+    "emptySeries": {
+      "status": 500,
+      "body": { "error": "No data found for indicator SP.POP.TOTL" },
+      "when": "JSON array length < 2, or index 1 is missing or empty"
+    }
+  },
+  "success": {
+    "status": 200,
+    "body": "The raw World Bank JSON envelope, not a normalized object. The handler returns jsonify(data) with no field picking."
+  }
+}

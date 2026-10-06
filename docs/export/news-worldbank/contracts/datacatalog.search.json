@@ -1,0 +1,55 @@
+{
+  "id": "datacatalog.search",
+  "route": "GET /api/search?q={query}",
+  "server": "server/app.py search_catalog lines 303-356",
+  "missingQ": {
+    "status": 400,
+    "body": { "error": "Query parameter \"q\" is required" }
+  },
+  "upstream": {
+    "method": "GET",
+    "url": "https://datacatalogapi.worldbank.org/ddhxext/Search",
+    "query": {
+      "qname": "dataset",
+      "qterm": "<the q argument>",
+      "$top": 10
+    },
+    "readPath": "Response.value[]"
+  },
+  "emptyUpstream": {
+    "status": 200,
+    "body": { "data": [] },
+    "when": "Response.value is missing, not a list, or empty"
+  },
+  "success": {
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "title": "World Development Indicators",
+          "description": "<p>HTML description from the catalog</p>",
+          "link": "https://datacatalog.worldbank.org/search/dataset/0037712",
+          "keywords": ["indicators"]
+        }
+      ]
+    }
+  },
+  "fieldMap": {
+    "title": "item.name, default 'No Title'",
+    "description": "item.identification.description, default 'No Description'",
+    "link": "item.app_legacy_url, default '#'",
+    "keywords": "item.keywords_list, default []"
+  },
+  "upstreamFailure": {
+    "status": 500,
+    "bodies": [
+      { "error": "Failed to fetch data from external API" },
+      { "error": "An unexpected error occurred" }
+    ]
+  },
+  "consumers": {
+    "DataPage": "renders title, HTML description, and View Report when link is truthy. '#' is truthy, so a missing catalog URL still renders View Report to href '#'",
+    "CareerAssistant client": "filters titles with a normalized substring, then shows description and link only when the input equals the full title",
+    "CareerAssistant server": "second request to http://localhost:5555/api/search?q={selectedReport}; case-insensitive exact title match; title, description, and link are pasted into the GPT prompt"
+  }
+}
